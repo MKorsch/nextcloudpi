@@ -217,6 +217,7 @@ User=www-data
 WantedBy = multi-user.target
 EOF
   [[ -f /.docker-image ]] || systemctl enable notify_push
+  # TODO --now? # TODO shut it down properly in docker and in build
 
   # some added security
   sed -i 's|^ServerSignature .*|ServerSignature Off|' /etc/apache2/conf-enabled/security.conf
