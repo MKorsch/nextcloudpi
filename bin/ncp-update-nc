@@ -190,6 +190,8 @@ $ncc | grep -q db:add-missing-primary-keys && $ncc db:add-missing-primary-keys -
 $ncc | grep -q db:convert-filecache-bigint && $ncc db:convert-filecache-bigint -n
 
 
+set -x
+
 # use the correct version for custom apps
 NCVER="$(ncc status | grep "version:" | awk '{ print $3 }')"
 if is_more_recent_than "21.0.0" "${NCVER}"; then
