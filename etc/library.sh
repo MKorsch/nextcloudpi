@@ -11,6 +11,12 @@
 export NCPCFG=${NCPCFG:-/usr/local/etc/ncp.cfg}
 export CFGDIR=/usr/local/etc/ncp-config.d
 export BINDIR=/usr/local/bin/ncp
+export NCDIR=/var/www/nextcloud
+
+export TRUSTED_DOMAINS=(
+  [ip]=1 [dnsmasq]=2 [nc_domain]=3 [nextcloudpi-local]=5 [docker_overwrite]=6
+  [nextcloudpi]=7 [nextcloudpi-lan]=8 [public_ip]=11 [letsencrypt_1]=12
+  [letsencrypt_2]=13 [trusted_domain_1]=20 [trusted_domain_1]=21 [trusted_domain_1]=22)
 
 command -v jq &>/dev/null || {
   apt-get update
@@ -18,10 +24,11 @@ command -v jq &>/dev/null || {
 }
 
 [[ -f "$NCPCFG" ]] && {
-  NCVER=$(  jq -r .nextcloud_version < "$NCPCFG")
-  PHPVER=$( jq -r .php_version       < "$NCPCFG")
-  RELEASE=$(jq -r .release           < "$NCPCFG")
+  NCLATESTVER=$(jq -r .nextcloud_version < "$NCPCFG")
+  PHPVER=$(     jq -r .php_version       < "$NCPCFG")
+  RELEASE=$(    jq -r .release           < "$NCPCFG")
 }
+command -v ncc &>/dev/null && NCVER="$(ncc status | grep "version:" | awk '{ print $3 }')"
 
 function configure_app()
 {
@@ -99,6 +106,19 @@ function configure_app()
   echo "$cfg" > "$cfg_file"
   printf '\033[2J' && tput cup 0 0             # clear screen, don't clear scroll, cursor on top
   return $ret
+}
+
+function set-nc-domain() {
+  local domain="${1?}"
+  local url="https://${domain%*/}"
+  # trusted_domain no 3 will always contain the overwrite domain
+  [[ "$2" == "--no-trusted-domain" ]] || ncc config:system:set trusted_domains 3 --value="${domain%*/}"
+  ncc config:system:set overwrite.cli.url --value="${url}/"
+  if is_app_enabled notify_push; then
+    ncc config:system:set trusted_proxies 11 --value="127.0.0.1"
+    ncc config:system:set trusted_proxies 12 --value="::1"
+    ncc notify_push:setup "${url}/push"
+  fi
 }
 
 function run_app()
@@ -304,12 +324,23 @@ function is_more_recent_than()
   return 0
 }
 
+function is_app_enabled()
+{
+  local app="$1"
+   ncc app:list | sed '0,/Disabled/!d' | grep -q "${app}"
+}
+
 function check_distro()
 {
   local cfg="${1:-$NCPCFG}"
   local supported=$(jq -r .release "$cfg")
   grep -q "$supported" <(lsb_release -sc) && return 0
   return 1
+}
+
+function nc_version()
+{
+  ncc status | grep "version:" | awk '{ print $3 }'
 }
 
 function clear_password_fields()

@@ -201,6 +201,7 @@ while :; do
   [[ "$ip" != "" ]] && break
   sleep 3
 done
+# set "${TRUSTED_DOMAINS[ip]}"
 ncc config:system:set trusted_domains 1 --value=$ip
 EOF
 
@@ -259,13 +260,29 @@ EOF
     [[ -f /.docker-image ]] || {
       $APTINSTALL avahi-daemon
       sed -i '/^127.0.1.1/d'           /etc/hosts
-      sed -i '$a127.0.1.1 nextcloudpi' /etc/hosts
+      sed -i "\$a127.0.1.1 nextcloudpi $(hostname)" /etc/hosts
     }
     echo nextcloudpi > /etc/hostname
 
     ## tag image
     [[ -f /.docker-image ]] && local DOCKER_TAG="_docker"
     echo "NextCloudPi${DOCKER_TAG}_$( date  "+%m-%d-%y" )" > /usr/local/etc/ncp-baseimage
+
+    ## notify_push service
+    cat > /etc/systemd/system/notify_push.service <<EOF
+[Unit]
+Description = Push daemon for Nextcloud clients
+After=mysqld.service
+
+[Service]
+Environment = PORT=7867 # Change if you already have something running on this port
+ExecStart = /var/www/nextcloud/apps/notify_push/bin/$(uname -m)/notify_push --allow-self-signed /var/www/nextcloud/config/config.php
+User=www-data
+
+[Install]
+WantedBy = multi-user.target
+EOF
+    [[ "$DOCKERBUILD" != 1 ]] && systemctl enable notify_push
 
     ## SSH hardening
     if [[ -f /etc/ssh/sshd_config ]]; then
